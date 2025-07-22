@@ -1,0 +1,374 @@
+# DOCUMENTACIÓN DEL SERVIDOR CRYSTAL (LEGEND OF MIR)
+
+==========================================================================
+ÍNDICE
+==========================================================================
+1. ESTRUCTURA GENERAL DEL SERVIDOR
+2. SISTEMA DE NPCs
+3. SISTEMA DE MONSTRUOS Y DROPS
+4. SISTEMA DE SPAWNS DE MONSTRUOS
+5. SISTEMA DE ITEMS
+6. GUÍA PRÁCTICA PARA CONFIGURAR EL SERVIDOR
+
+==========================================================================
+1. ESTRUCTURA GENERAL DEL SERVIDOR
+==========================================================================
+
+El servidor Crystal está organizado en varios componentes principales:
+
+- MirDatabase: Contiene las definiciones de datos (NPCs, monstruos, items, etc.)
+- MirObjects: Implementa la lógica de los objetos del juego
+- MirEnvir: Gestiona el entorno del juego (mapas, clima, etc.)
+- MirNetwork: Maneja la comunicación de red
+
+Los archivos principales se encuentran en:
+- Server/MirDatabase/ - Definiciones de datos
+- Server/MirObjects/ - Implementación de objetos
+- Server/MirEnvir/ - Gestión del entorno
+- Server/Settings.cs - Configuración general del servidor
+
+==========================================================================
+2. SISTEMA DE NPCs
+==========================================================================
+
+Los NPCs se definen en la clase NPCInfo (Server/MirDatabase/NPCInfo.cs) y se 
+implementan en NPCObject (Server/MirObjects/NPCObject.cs).
+
+----- CÓMO CREAR Y CONFIGURAR NPCs -----
+
+1. CREAR EL NPC EN EL SERVIDOR:
+   - Usa el método FromText en NPCInfo.cs para crear un NPC desde una cadena de texto
+   - El formato es: 
+     NombreArchivo,NombreMapa,PosX,PosY,NombreNPC,Imagen,Tasa,MostrarEnMapaGrande,IconoMapaGrande,PuedeTeletransportarse,VisibleEnConquista
+   - Ejemplo: "Merchant,0,150,150,Comerciante,10,100,true,1,true,true"
+
+2. CONFIGURAR EL SCRIPT DEL NPC:
+   - Los NPCs utilizan scripts para definir su comportamiento
+   - Los scripts se cargan mediante el método LoadScript() en NPCObject.cs
+   - Los scripts definen diálogos, tiendas, misiones y otras interacciones
+   - Los scripts se almacenan generalmente en la carpeta "NPCs" del servidor
+
+3. PROPIEDADES IMPORTANTES DE NPCs:
+   - Index: ID único del NPC
+   - FileName: Nombre del archivo de script
+   - Name: Nombre del NPC
+   - MapIndex: Índice del mapa donde aparece
+   - Location: Posición (X,Y) en el mapa
+   - Image: ID de la imagen del NPC
+   - TimeVisible: Si el NPC solo es visible en ciertos horarios
+   - HourStart/HourEnd: Horas de visibilidad
+   - MinLev/MaxLev: Nivel mínimo/máximo del jugador para ver el NPC
+   - ClassRequired: Clases que pueden ver el NPC
+   - FlagNeeded: Flag requerido para ver el NPC
+
+----- EJEMPLO DE CREACIÓN DE NPC -----
+
+Para crear un NPC comerciante en el mapa 0, posición (150,150):
+
+1. Crear el NPC:
+   "Merchant,0,150,150,Comerciante,10,100,true,1,true,true"
+
+2. Crear un archivo de script llamado "Merchant.txt" con el siguiente contenido:
+   [MAIN]
+   #IF
+   #SAY
+   Bienvenido a mi tienda.
+   ¿Qué deseas comprar?
+   
+   @Comprar
+   @Vender
+   @Salir
+   
+   [COMPRAR]
+   #IF
+   #SAY
+   ¿Qué deseas comprar?
+   
+   #BUY
+   
+   [VENDER]
+   #IF
+   #SAY
+   ¿Qué deseas vender?
+   
+   #SELL
+
+==========================================================================
+3. SISTEMA DE MONSTRUOS Y DROPS
+==========================================================================
+
+Los monstruos se definen en MonsterInfo.cs y se implementan en MonsterObject.cs.
+
+----- CONFIGURACIÓN DE MONSTRUOS -----
+
+1. CREAR UN MONSTRUO:
+   - Usa el método FromText en MonsterInfo.cs
+   - El formato básico es: 
+     Nombre,Imagen,AI,Efecto,Nivel,RangoVisión,Luz,VelocidadAtaque,VelocidadMovimiento,Experiencia,PuedeDomarse,PuedeEmpujarse,AutoRevivir,NoMuerto,OjoFrío
+   - Ejemplo: "Skeleton,33,0,0,1,7,0,2500,1800,50,true,true,true,true,0"
+
+2. PROPIEDADES IMPORTANTES DE MONSTRUOS:
+   - Index: ID único del monstruo
+   - Name: Nombre del monstruo
+   - Image: Apariencia del monstruo (ID de imagen)
+   - AI: Tipo de inteligencia artificial (determina comportamiento)
+     * 0: Pasivo (no ataca a menos que sea atacado)
+     * 1: Agresivo (ataca a jugadores en su rango de visión)
+     * 2: Hostil (ataca a jugadores y otros monstruos)
+     * 3: Mascota (sigue a su dueño)
+     * 4: Guardia (ataca a jugadores criminales)
+   - Level: Nivel del monstruo
+   - Stats: Estadísticas (HP, AC, MAC, DC, MC, SC, etc.)
+   - AttackSpeed/MoveSpeed: Velocidades de ataque y movimiento
+   - Experience: Experiencia otorgada al matar
+   - DropPath: Ruta al archivo de drops del monstruo
+
+----- CONFIGURACIÓN DE DROPS DE MONSTRUOS -----
+
+Los drops se configuran en archivos de texto y se cargan mediante el método Load en la clase DropInfo:
+
+1. UBICACIÓN DE LOS ARCHIVOS DE DROP:
+   - Cada monstruo tiene una propiedad DropPath que apunta al archivo de drops
+   - Por defecto, los archivos se organizan en categorías: Pots+Other, Weapons, Armour, etc.
+   - Los archivos suelen estar en una carpeta "Drops" del servidor
+
+2. FORMATO DE LOS DROPS:
+   - Cada línea tiene el formato: "Chance Item [Requisito]"
+   - La probabilidad se expresa como fracción: 1/100 significa 1% de probabilidad
+   - Ejemplos:
+     * 1/10 GoldOre (10% de probabilidad de soltar GoldOre)
+     * 1/100 DragonSword Q (1% de probabilidad de soltar DragonSword, requiere misión)
+     * 1/1 Gold 1000 (100% de probabilidad de soltar 1000 de oro)
+
+3. GRUPOS DE DROPS:
+   - Se pueden crear grupos de drops usando la sintaxis:
+     1/20 GROUP*
+     {
+         1/3 Amuleto1
+         1/3 Amuleto2
+         1/3 Amuleto3
+     }
+   - GROUP*: Selecciona un item aleatorio del grupo
+   - GROUP^: Selecciona el primer item disponible del grupo
+
+----- EJEMPLO DE ARCHIVO DE DROPS -----
+
+Un archivo de drops típico para un monstruo podría ser:
+
+;Pots + Other
+1/10 (1)HPPotion
+1/20 (1)MPPotion
+1/1 Gold 100
+
+;Weapons
+1/100 ShortSword
+1/200 IronSword
+
+;Armour
+1/150 LightArmour
+
+;Grupo especial
+1/50 GROUP*
+{
+    1/3 GoldRing
+    1/3 SilverRing
+    1/3 BronzeRing
+}
+
+==========================================================================
+4. SISTEMA DE SPAWNS DE MONSTRUOS
+==========================================================================
+
+Los spawns se definen en la clase RespawnInfo y controlan dónde y cómo aparecen los monstruos.
+
+----- CONFIGURACIÓN DE SPAWNS -----
+
+1. CREAR UN SPAWN:
+   - Usa el método FromText en RespawnInfo.cs
+   - El formato es: 
+     MonsterIndex,X,Y,Cantidad,Dispersión,Retraso,Dirección,RetrasoAleatorio,RespawnIndex,GuardarTiempoRespawn,TiemposRespawn
+   - Ejemplo: "0,150,150,10,20,10,0,5,1,false,0"
+     (Spawn de 10 monstruos con ID 0, en posición 150,150, con dispersión de 20 casillas)
+
+2. PROPIEDADES IMPORTANTES DE SPAWNS:
+   - MonsterIndex: ID del monstruo a generar
+   - Location: Punto central del spawn (X,Y)
+   - Count: Número de monstruos a generar
+   - Spread: Área de dispersión alrededor del punto central
+   - Delay: Tiempo entre respawns (en segundos)
+   - RandomDelay: Variación aleatoria adicional al tiempo de respawn
+   - Direction: Dirección inicial de los monstruos (0-7, donde 0 es arriba)
+   - RespawnIndex: ID único del spawn
+   - SaveRespawnTime: Si se debe guardar el tiempo de respawn
+   - RespawnTicks: Ticks para el respawn (0 = inmediato)
+
+3. RUTAS DE MOVIMIENTO:
+   - Se pueden definir rutas para que los monstruos se muevan siguiendo un patrón
+   - La propiedad RoutePath contiene la ruta del archivo con los puntos de la ruta
+   - Los archivos de ruta contienen coordenadas X,Y y opcionalmente un retraso
+
+----- EJEMPLO DE CONFIGURACIÓN DE SPAWN -----
+
+Para crear un spawn de 10 esqueletos en el mapa 0, posición (150,150):
+
+1. Asegúrate de que el monstruo "Skeleton" existe y tiene un ID (por ejemplo, 0)
+2. Crea un spawn con:
+   "0,150,150,10,20,10,0,5,1,false,0"
+
+3. Para crear una ruta de movimiento, crea un archivo (por ejemplo, "SkeletonRoute.txt"):
+   150,150,0
+   160,160,5
+   170,150,5
+   160,140,5
+   150,150,5
+
+4. Asigna esta ruta al spawn mediante la propiedad RoutePath
+
+==========================================================================
+5. SISTEMA DE ITEMS
+==========================================================================
+
+Los items se definen en la clase ItemInfo y se implementan en UserItem.
+
+----- PROPIEDADES DE LOS ITEMS -----
+
+1. PROPIEDADES BÁSICAS:
+   - Index: ID único del item
+   - Name: Nombre del item
+   - Type: Tipo de item (Weapon, Armour, Potion, etc.)
+   - Grade: Grado del item (Common, Rare, Legendary, etc.)
+   - RequiredClass: Clase requerida para usar el item
+   - RequiredGender: Género requerido para usar el item
+   - RequiredAmount: Nivel requerido para usar el item
+   - Stats: Estadísticas que proporciona el item
+   - Weight: Peso del item
+   - Durability: Durabilidad del item
+   - Price: Precio base del item
+   - StackSize: Cantidad máxima en un stack
+
+2. TIPOS DE ITEMS:
+   - ItemType.Weapon: Armas
+   - ItemType.Armour: Armaduras
+   - ItemType.Helmet: Cascos
+   - ItemType.Necklace: Collares
+   - ItemType.Bracelet: Brazaletes
+   - ItemType.Ring: Anillos
+   - ItemType.Amulet: Amuletos
+   - ItemType.Belt: Cinturones
+   - ItemType.Boots: Botas
+   - ItemType.Stone: Piedras
+   - ItemType.Torch: Antorchas
+   - ItemType.Potion: Pociones
+   - ItemType.Ore: Minerales
+   - ItemType.Meat: Carnes
+   - ItemType.Crafting: Materiales de crafteo
+   - ItemType.Scroll: Pergaminos
+   - ItemType.Quest: Items de misión
+   - ItemType.Gold: Oro
+   - ItemType.Book: Libros
+
+3. ESTADÍSTICAS DE ITEMS:
+   - AC/MAC: Defensa física/mágica
+   - DC/MC/SC: Daño físico/mágico/taoísta
+   - Accuracy/Agility: Precisión/Agilidad
+   - HP/MP: Puntos de vida/maná
+   - AttackSpeed: Velocidad de ataque
+   - Luck: Suerte
+   - BagWeight/HandWeight/WearWeight: Capacidad de carga
+   - Strong/MagicResist/PoisonResist: Resistencias
+   - HealthRecovery/SpellRecovery/PoisonRecovery: Recuperación
+   - CriticalRate/CriticalDamage: Críticos
+   - Freezing/PoisonAttack: Ataques elementales
+   - Reflect/HPDrainRate: Efectos especiales
+
+----- CREACIÓN DE ITEMS -----
+
+Los items se crean generalmente a través del editor del servidor, pero también pueden
+crearse programáticamente:
+
+1. Crear un nuevo ItemInfo con propiedades básicas
+2. Asignar estadísticas al item
+3. Añadir el item a la lista de items del servidor (Envir.ItemInfoList)
+
+==========================================================================
+6. GUÍA PRÁCTICA PARA CONFIGURAR EL SERVIDOR
+==========================================================================
+
+----- CÓMO AÑADIR UN NPC -----
+
+1. Abre el editor del servidor (Server.MirForms)
+2. Ve a la sección de NPCs
+3. Crea un nuevo NPC con los siguientes datos:
+   - Nombre del archivo (script): por ejemplo, "Merchant"
+   - Mapa: selecciona el mapa donde aparecerá
+   - Posición X,Y: coordenadas en el mapa
+   - Imagen: ID de la imagen del NPC
+4. Crea un archivo de script con el mismo nombre en la carpeta de scripts de NPCs
+5. Define el comportamiento del NPC en el script (diálogos, tienda, etc.)
+
+----- CÓMO CONFIGURAR DROPS DE MONSTRUOS -----
+
+1. Encuentra o crea el archivo de drops para el monstruo (normalmente en la carpeta "Drops")
+2. El archivo debe tener secciones como:
+   ;Pots + Other
+   1/10 (1)HPPotion
+   1/20 (1)MPPotion
+   
+   ;Weapons
+   1/100 ShortSword
+   1/200 IronSword
+   
+   ;Armour
+   1/150 LightArmour
+3. Asigna este archivo al monstruo mediante la propiedad DropPath
+
+----- CÓMO CONFIGURAR SPAWNS DE MONSTRUOS -----
+
+1. En el editor del servidor, ve a la sección de Respawns
+2. Crea un nuevo respawn con:
+   - MonsterIndex: ID del monstruo
+   - Posición X,Y: punto central del spawn
+   - Count: número de monstruos
+   - Spread: área de dispersión
+   - Delay: tiempo entre respawns
+3. Para spawns más complejos, puedes definir rutas de movimiento en archivos separados
+
+----- CÓMO CREAR NUEVOS ITEMS -----
+
+1. En el editor del servidor, ve a la sección de Items
+2. Crea un nuevo item con:
+   - Nombre: nombre del item
+   - Tipo: tipo de item (arma, armadura, etc.)
+   - Estadísticas: valores de AC, MAC, DC, MC, SC, etc.
+   - Requisitos: nivel, clase, género
+   - Durabilidad: durabilidad máxima
+   - Precio: precio base
+
+----- CONSEJOS ADICIONALES -----
+
+1. RESPALDO DE DATOS:
+   - Haz copias de seguridad regulares de la carpeta "Data" del servidor
+   - Esta carpeta contiene toda la información de cuentas, personajes, etc.
+
+2. CONFIGURACIÓN DEL SERVIDOR:
+   - La mayoría de las opciones del servidor se configuran en Settings.cs
+   - Puedes ajustar tasas de experiencia, drop, oro, etc.
+
+3. RESOLUCIÓN DE PROBLEMAS:
+   - Revisa los logs del servidor en la carpeta "Logs"
+   - Utiliza la consola del servidor para comandos administrativos
+   - Para problemas de conexión, verifica la configuración de red y puertos
+
+4. COMANDOS ADMINISTRATIVOS:
+   - /create [itemname] [cantidad] - Crea un item
+   - /goto [x] [y] - Teletransporta a coordenadas
+   - /mon [monstruo] [cantidad] - Genera monstruos
+   - /level [nivel] - Cambia el nivel del personaje
+   - /gold [cantidad] - Añade oro
+   - /ban [usuario] - Banea a un usuario
+   - /unban [usuario] - Desbanea a un usuario
+   - /gmmode - Activa/desactiva modo GM
+
+==========================================================================
+FIN DE LA DOCUMENTACIÓN
+==========================================================================
